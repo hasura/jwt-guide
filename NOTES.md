@@ -1,6 +1,7 @@
 Refresh Token Flow (rfc6749, Section 1.5)
 From https://datatracker.ietf.org/doc/html/rfc6749#section-1.5
  
+ ```
   +--------+                                           +---------------+
   |        |--(A)------- Authorization Grant --------->|               |
   |        |                                           |               |
@@ -23,7 +24,7 @@ From https://datatracker.ietf.org/doc/html/rfc6749#section-1.5
   +--------+           & Optional Refresh Token        +---------------+
 
                Figure 2: Refreshing an Expired Access Token
-
+```
 
 
 Goals:
