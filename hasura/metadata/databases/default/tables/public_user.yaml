@@ -1,0 +1,22 @@
+table:
+  name: user
+  schema: public
+select_permissions:
+- permission:
+    columns:
+    - email
+    - id
+    filter:
+      id:
+        _is_null: true
+  role: anonymous
+- permission:
+    columns:
+    - id
+    - email
+    - password
+    - refresh_token
+    filter:
+      id:
+        _eq: X-Hasura-User-Id
+  role: user

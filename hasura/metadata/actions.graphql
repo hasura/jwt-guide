@@ -1,0 +1,46 @@
+type Query {
+  login(
+    params: LoginInput!
+  ): AccessTokens!
+}
+
+type Query {
+  refreshJwtToken(
+    refreshToken: String!
+    fingerprintHash: String!
+  ): JwtToken!
+}
+
+type Mutation {
+  signout: SignoutOutput
+}
+
+type Mutation {
+  signup(
+    params: SignupInput!
+  ): AccessTokens!
+}
+
+input SignupInput {
+  email: String!
+  password: String!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+type JwtToken {
+  jwt: String!
+}
+
+type AccessTokens {
+  jwt: String!
+  refreshToken: String!
+}
+
+type SignoutOutput {
+  ok: Boolean!
+}
+
