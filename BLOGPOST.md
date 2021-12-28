@@ -8,7 +8,7 @@ Although, we’ve worked on the examples with a GraphQL clients, but the concept
 
 Changelog:
 - (12/28/2021) Recommendation to store token in Cookie changed to `sessionStorage`, per OWASP JWT guidelines to address `Issue: Token Storage on Client Side` [0]
-- (12/28/2021) Adopted OWASP Application Security Verification Standard  v5 L1-L2 guidelines 
+- (12/28/2021) Adopted OWASP Application Security Verification Standard  v5 [6] L1-L2 guidelines 
   - Of note: Chapters 3 (`Session Management`) and 8 (`Data Protection`)
 - (12/28/2021) Sample application repo code updated [1]
     - Update from Next.js 9 -> 12, update `@apollo` libraries to `v3.x`
