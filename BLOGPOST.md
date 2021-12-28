@@ -4,6 +4,30 @@ JWTs (JSON Web Token, pronounced 'jot') are becoming a popular way of handling a
 This post aims to demystify what a JWT is, discuss its pros/cons and cover best practices in implementing JWT on the client-side, keeping security in mind.
 Although, we’ve worked on the examples with a GraphQL clients, but the concepts apply to any frontend client.
 
+> Note: This guide originally published on Septermber 9th, 2019. Last updated on December 28, 2021.
+
+Changelog:
+- (12/28/2021) Recommendation to store token in Cookie changed to `sessionStorage`, per OWASP JWT guidelines to address `Issue: Token Storage on Client Side` [0]
+- (12/28/2021) Adopted OWASP Application Security Verification Standard  v5 L1-L2 guidelines 
+  - Of note: Chapters 3 (`Session Management`) and 8 (`Data Protection`)
+- (12/28/2021) Sample application repo code updated [1]
+    - Update from Next.js 9 -> 12, update `@apollo` libraries to `v3.x`
+    - Password hashing algorithm changed from `bcrypt` to native Node.js `crypto.scrypt` per OWASP guidelines [2] and to reduce number of external dependencies
+    - Authentication on frontend and backend modified to make use of a user fingerprint in addition to a token, per OWASP guidelines on preventing `Token Sidejacking` [3]
+    - Example usage of `TokenRefreshLink` [4] to manage silent refresh workflow added
+    - Server endpoints integrated through Hasura Actions [5] rather than directly invoking from client
+    - Adopt recommended use of `crypto.timingSafeEqual()` to prevent timing attacks 
+
+[0]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4
+[1]: https://github.com/hasura/jwt-guide
+[2]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/Password_Storage_Cheat_Sheet.md#scrypt
+[3]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#token-sidejacking
+[4]: https://github.com/newsiberian/apollo-link-token-refresh
+[5]: https://hasura.io/docs/latest/graphql/core/actions/index.html
+[6]: https://owasp.org/www-project-application-security-verification-standard/
+
+---
+
 - [Introduction: What is a JWT?](#introduction-what-is-a-jwt)
   - [Security Considerations](#security-considerations)
   - [JWT Structure](#jwt-structure)
