@@ -10,13 +10,14 @@ Changelog:
 - (12/28/2021) Recommendation to store token in Cookie changed to `sessionStorage`, per OWASP JWT guidelines to address `Issue: Token Storage on Client Side` [0]
 - (12/28/2021) Adopted OWASP Application Security Verification Standard  v5 [6] L1-L2 guidelines 
   - Of note: Chapters 3 (`Session Management`) and 8 (`Data Protection`)
+- (12/28/2021) Alter section on `Persisting Sessions` to contain OWASP guidelines on this
 - (12/28/2021) Sample application repo code updated [1]
     - Update from Next.js 9 -> 12, update `@apollo` libraries to `v3.x`
     - Password hashing algorithm changed from `bcrypt` to native Node.js `crypto.scrypt` per OWASP guidelines [2] and to reduce number of external dependencies
     - Authentication on frontend and backend modified to make use of a user fingerprint in addition to a token, per OWASP guidelines on preventing `Token Sidejacking` [3]
     - Example usage of `TokenRefreshLink` [4] to manage silent refresh workflow added
     - Server endpoints integrated through Hasura Actions [5] rather than directly invoking from client
-    - Adopt recommended use of `crypto.timingSafeEqual()` to prevent timing attacks 
+    - Adopt recommended use of `crypto.timingSafeEqual()` to prevent timing attacks
 
 [0]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4
 [1]: https://github.com/hasura/jwt-guide
