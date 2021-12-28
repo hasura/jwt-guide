@@ -447,15 +447,40 @@ These are the 2 things we now need to do on logout:
 2. Set `logout` item in local storage
 
 ```js
-async function logout () {
-  inMemoryToken = null;
-  const url = 'http://localhost:3010/auth/logout'
-  const response = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-  })
-  // to support logging out from all windows
-  window.localStorage.setItem('logout', Date.now())
+import { useEffect } from "react"
+import { useRouter } from "next/router"
+import { gql, useMutation, useApolloClient } from "@apollo/client"
+import { setJwtToken, setRefreshToken } from "../lib/auth"
+
+const SignOutMutation = gql`
+    mutation SignOutMutation {
+        signout {
+            ok
+        }
+    }
+`
+
+function SignOut() {
+    const client = useApolloClient()
+    const router = useRouter()
+    const [signOut] = useMutation(SignOutMutation)
+
+    useEffect(() => {
+        // Clear the JWT and refresh token so that Apollo doesn't try to use them
+        setJwtToken("")
+        setRefreshToken("")
+        // Tell Apollo to reset the store
+        // Finally, redirect the user to the home page
+        signOut().then(() => {
+            // to support logging out from all windows
+            window.localStorage.setItem('logout', Date.now())
+            client.resetStore().then(() => {
+                router.push("/signin")
+            })
+        })
+    }, [signOut, router, client])
+
+    return <p>Signing out...</p>
 }
 ```
 
@@ -485,20 +510,29 @@ On the client, before the previous JWT token expires, we wire up our app to make
 
 How is a refresh token safely persisted on the client?!
 
-The refresh token is sent by the auth server to the client as an `HttpOnly` cookie and is automatically sent by the browser in a `/refresh_token` API call.
+We follow the guidelines in the OWASP JWT Guide to prevent issues with client-side storage of a token.
 
-Because client side Javascript can't read or steal an `HttpOnly` cookie, this is a little better at mitigating XSS than persisting it as a normal cookie or in localstorage.
+> Reference: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#token-storage-on-client-side
 
-This is safe from [CSRF](https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF)) attacks, because even though a form submit attack can make a `/refresh_token` API call, the attacker cannot get the new JWT token value that is returned.
+Improper client-side storage occurs when _"an application stores the token in a manner exhibiting the following behavior"_:
 
-To recap, this is how we're thinking about what would be the best way of persisting a JWT based session:
+- Automatically sent by the browser (Cookie storage).
+- Retrieved even if the browser is restarted (Use of browser localStorage container).
+- Retrieved in case of XSS issue (Cookie accessible to JavaScript code or Token stored in browser local/session storage).
 
-```
-Persisting JWT token in localstorage (prone to XSS) <
-Persisting JWT token in an HttpOnly cookie (prone to CSRF, a little bit better for XSS) < Persisting refresh token in an HttpOnly cookie (safe from CSRF, a little bit better for XSS).
-```
+To prevent this, the following steps are taken:
 
-Note that while this method is not resilient to serious XSS attacks, coupled with the [usual XSS mitigation techniques](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html#xss-prevention-rules), an `HttpOnly` cookie is a [recommended way](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html#bonus-rule-1-use-httponly-cookie-flag) of persisting session related information. But by persisting our session indirectly via a refresh token, we prevent a direct CSRF vulnerability we would have had with a JWT token.
+- Store the token using the browser `sessionStorage` container.
+- Add it as a Bearer HTTP `Authentication` header with JavaScript when calling services.
+- Add `fingerprint` information to the token.
+
+By storing the token in browser `sessionStorage` container it exposes the token to being stolen through a XSS attack. However, `fingerprints` added to the token prevent reuse of the stolen token by the attacker on their machine. To close a maximum of exploitation surfaces for an attacker, add a browser `Content Security Policy` to harden the execution context.
+
+Where the implementation of a `fingerprint` also serves to prevent Token Sidejacking from occuring, and is done according to the guidelines here:
+
+https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#token-sidejacking
+
+
 
 **So what does the new "login" process look like?**
 
@@ -507,10 +541,10 @@ Nothing much changes, except that a refresh token gets sent along with the JWT. 
 ![Login with refresh token](https://hasura.io/blog/content/images/2019/09/Screen-Shot-2019-09-06-at-11.46.17.png)
 
 1. The user logs in with a login API call.
-2. Server generates JWT Token and `refresh_token`
-3. Server sets a `HttpOnly` cookie with `refresh_token`. `jwt_token` and `jwt_token_expiry` are returned back to the client as a JSON payload.
-4. The `jwt_token` is stored in memory.
-5. A countdown to a future silent refresh is started based on `jwt_token_expiry`
+2. Server generates JWT token and `refresh_token`, and a `fingerprint`
+3. The server returns the JWT token, refresh token, and a `SHA256`-hashed version of the fingerprint in the token claims
+4. The un-hashed version of the generated fingerprint is stored as a hardened, `HttpOnly` cookie on the client
+5. When the JWT token expires, a silent refresh will happen. This is where the client calls the `/refresh` token endpoint
 
 **And now, what does the silent refresh look like?**
 
@@ -519,44 +553,105 @@ Silent refresh workflow
 
 Here's what happens:
 
-1. Call `/refresh_token` endpoint
-2. Server will read `HttpOnly` cookie and if it finds a valid `refresh_token`, then...
-3. ...the server returns a new `jwt_token` and `jwt_token_expiry` to the client and also sets a new *refresh token* cookie via `Set-Cookie` header.
+1. The refresh endpoint must check for the existence of the fingerprint cookie, and validate that the comparison of the hashed value in the token claims is identical to the unhashed value in the cookie
+2. If either of these conditions are not met, the refresh request is rejected
+3. Otherwise the refresh token is accepted, and a fresh JWT access token is granted, resetting the silent refresh process
+
+An implementation of this workflow using the `apollo-link-token-refresh` package, is something like the below.
+Using this as a non-terminating link will automatically check the validity of our JWT, and attempt a silent refresh if needed when any operation is run.
+
+```js
+import { TokenRefreshLink } from "apollo-link-token-refresh"
+import { JwtPayload } from "jwt-decode"
+import { getJwtToken, getRefreshToken, setJwtToken } from "./auth"
+import decodeJWT from "jwt-decode"
+
+export function makeTokenRefreshLink() {
+    return new TokenRefreshLink({
+        // Indicates the current state of access token expiration
+        // If token not yet expired or user doesn't have a token (guest) true should be returned
+        isTokenValidOrUndefined: () => {
+            const token = getJwtToken()
+
+            // If there is no token, the user is not logged in
+            // We return true here, because there is no need to refresh the token
+            if (!token) return true
+
+            // Otherwise, we check if the token is expired
+            const claims: JwtPayload = decodeJWT(token)
+            const expirationTimeInSeconds = claims.exp * 1000
+            const now = new Date()
+            const isValid = expirationTimeInSeconds >= now.getTime()
+
+            // Return true if the token is still valid, otherwise false and trigger a token refresh
+            return isValid
+        },
+        // Responsible for fetching refresh token
+        fetchAccessToken: async () => {
+            const jwt = decodeJWT(getJwtToken())
+            const refreshToken = getRefreshToken()
+            const fingerprintHash = jwt?.["https://hasura.io/jwt/claims"]?.["X-User-Fingerprint"]
+
+            const request = await fetch(process.env["NEXT_PUBLIC_HASURA_ENDPOINT"], {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    query: `
+                  query RefreshJwtToken($refreshToken: String!, $fingerprintHash: String!) {
+                    refreshJwtToken(refreshToken: $refreshToken, fingerprintHash: $fingerprintHash) {
+                      jwt
+                    }
+                  }
+                `,
+                    variables: {
+                        refreshToken,
+                        fingerprintHash,
+                    },
+                }),
+            })
+
+            return request.json()
+        },
+        // Callback which receives a fresh token from Response.
+        // From here we can save token to the storage
+        handleFetch: (accessToken) => {
+            setJwtToken(accessToken)
+        },
+        handleResponse: (operation, accessTokenField) => (response) => {
+            // here you can parse response, handle errors, prepare returned token to
+            // further operations
+            // returned object should be like this:
+            // {
+            //    access_token: 'token string here'
+            // }
+            return { access_token: response.refreshToken.jwt }
+        },
+        handleError: (err) => {
+            console.warn("Your refresh token is invalid. Try to reauthenticate.")
+            console.error(err)
+            // Remove invalid tokens
+            localStorage.removeItem("jwt")
+            localStorage.removeItem("refreshToken")
+        },
+    })
+}
+```
 
 ---
 
 # Persisting sessions
 
-Now that we can make sure that our users don't keep getting logged out, let's turn our attention to the second problem of persisting sessions.
+Persisting sessions is against the OWASP security guidelines for clients and token authentication.
 
-You'll notice that if users close your app and open it again (lets say by closing the browser tab and re-opening it), they'll be asked to login again.
+https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4
 
-Apps usually ask their users if they want to "stay logged in" across sessions, or by default, keep their users logged in. This is what we'd like to implement as well.
+_"... Retrieved even if the browser is restarted (Use of browser `localStorage` container)."_
 
-Currently, we can't do this because the JWT is only stored in memory and is not persisted. To recap, head to this section above to see why we can't store JWTs in cookies or in localstorage directly.
+There is (at the time of writing) no way deemed acceptable that allows for a persistent user session after a browser has been fully closed and re-opened, unless the browser implementation retains tab session state (`sessionStorage`).
 
-**So how do we persist sessions securely then?**
-
-Refresh tokens! We were able to persist refresh tokens securely and use them for silent refresh (aka renewing our short expiry JWT tokens without asking users to login again). And we can also use them to fetch a new JWT token for a new session! Check out the previous section discussing how refresh tokens are persisted.
-
-Let's say that the user logged out of their current session by closing their browser tab. Now that the user visits the app again, let's see what the flow looks like:
-
-![JWT Silent Refresh Flow Diagram](https://hasura.io/blog/content/images/2019/09/Screen-Shot-2019-09-06-at-11.46.03.png)
-
-1. If we see that we don't have a JWT in memory, then we trigger the silent refresh workflow
-2. If the refresh token is still valid (or hasn't been revoked), then we get a new JWT and we're good to go!
-
-**Possible error case:**
-
-In case our refresh token expires (say the user comes back to the app after a really long time), or gets revoked (because of a "force logout", say) the client will get 401 error for an unauthorized `refresh_token`. Another case might just be that we don’t have any `refresh_token` in the first place, in which case we'll also get an error from our `/refresh_token endpoint` and we will redirect the user to the login screen.
-
-Here's some sample code showing how we would deal with this error handling using a `logoutLink`
-
-```js
-const logoutLink = onError(({ networkError }) => {
- if (networkError.statusCode === 401) logout();
-})
-```
+For an ongoing discussion of this topic, see https://github.com/OWASP/ASVS/issues/1141
 
 ---
 
