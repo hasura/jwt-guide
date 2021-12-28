@@ -639,6 +639,32 @@ export function makeTokenRefreshLink() {
 }
 ```
 
+Referring back to the section addressing: `"What will happen if I'm logged in on multiple tabs?"`, using sessionStorage for this means we won't be authenticated in new tabs (if they weren't created using `"Duplicate tab"`) or windows.
+
+A potential solution to this, while still remaining secure, is to use `localStorage` as an event-emitter again and sync `sessionStorage` between tabs of the same base URL on load.
+
+This can be accomplished by using a script such as this on your pages:
+```js
+if (!sessionStorage.length) {
+    // Ask other tabs for session storage
+    localStorage.setItem("getSessionStorage", String(Date.now()))
+}
+
+window.addEventListener("storage", (event) => {
+    if (event.key == "getSessionStorage") {
+        // Some tab asked for the sessionStorage -> send it
+        localStorage.setItem("sessionStorage", JSON.stringify(sessionStorage))
+        localStorage.removeItem("sessionStorage")
+    } else if (event.key == "sessionStorage" && !sessionStorage.length) {
+        // sessionStorage is empty -> fill it
+        const data = JSON.parse(event.newValue)
+        for (let key in data) {
+            sessionStorage.setItem(key, data[key])
+        }
+    }
+})
+```
+
 ---
 
 # Persisting sessions
