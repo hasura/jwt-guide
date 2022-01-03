@@ -170,7 +170,7 @@ During token validation, if the received token does not contain the right contex
 
 ---
 
-An implementation of this on the clint side may look like:
+An implementation of this on the client side may look like:
 
 ```js
 // Short duration JWT token (5-10 min)
