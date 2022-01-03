@@ -6,29 +6,9 @@ Although, we’ve worked on the examples with a GraphQL clients, but the concept
 
 > Note: This guide originally published on Septermber 9th, 2019. Last updated on December 28, 2021.
 
-Changelog:
-- (12/28/2021) Recommendation to store token in Cookie changed to `sessionStorage`, per OWASP JWT guidelines to address `Issue: Token Storage on Client Side` [0]
-- (12/28/2021) Adopted OWASP Application Security Verification Standard  v5 [6] L1-L2 guidelines 
-  - Of note: Chapters 3 (`Session Management`) and 8 (`Data Protection`)
-- (12/28/2021) Alter section on `Persisting Sessions` to contain OWASP guidelines on this
-- (12/28/2021) Sample application repo code updated [1]
-    - Update from Next.js 9 -> 12, update `@apollo` libraries to `v3.x`
-    - Password hashing algorithm changed from `bcrypt` to native Node.js `crypto.scrypt` per OWASP guidelines [2] and to reduce number of external dependencies
-    - Authentication on frontend and backend modified to make use of a user fingerprint in addition to a token, per OWASP guidelines on preventing `Token Sidejacking` [3]
-    - Example usage of `TokenRefreshLink` [4] to manage silent refresh workflow added
-    - Server endpoints integrated through Hasura Actions [5] rather than directly invoking from client
-    - Adopt recommended use of `crypto.timingSafeEqual()` to prevent timing attacks
+# Table of Contents
 
-[0]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4
-[1]: https://github.com/hasura/jwt-guide
-[2]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/Password_Storage_Cheat_Sheet.md#scrypt
-[3]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#token-sidejacking
-[4]: https://github.com/newsiberian/apollo-link-token-refresh
-[5]: https://hasura.io/docs/latest/graphql/core/actions/index.html
-[6]: https://owasp.org/www-project-application-security-verification-standard/
-
----
-
+- [Table of Contents](#table-of-contents)
 - [Introduction: What is a JWT?](#introduction-what-is-a-jwt)
   - [Security Considerations](#security-considerations)
   - [JWT Structure](#jwt-structure)
@@ -39,11 +19,12 @@ Changelog:
 - [Persisting sessions](#persisting-sessions)
 - [Force logout, aka Logout of all sessions/devices](#force-logout-aka-logout-of-all-sessionsdevices)
 - [Server side rendering (SSR)](#server-side-rendering-ssr)
-- [How does the SSR server know if the user is logged in?](#how-does-the-ssr-server-know-if-the-user-is-logged-in)
+  - [How does the SSR server know if the user is logged in?](#how-does-the-ssr-server-know-if-the-user-is-logged-in)
 - [Code from this blogpost (finished application)](#code-from-this-blogpost-finished-application)
 - [Try it out!](#try-it-out)
 - [References](#references)
 - [Summary](#summary)
+- [Changelog](#changelog)
 
 # Introduction: What is a JWT?
 
@@ -103,7 +84,7 @@ This is why API developers like JWTs, and we (on the client-side) need to figure
 
 Now that we have a basic understanding what a JWT is, let's create a simple login flow and extract the JWT. This is what we want to achieve:
 
-![](https://hasura.io/blog/content/images/2019/08/Screen-Shot-2019-08-27-at-8.21.35.png)
+![A login flow for getting a JWT](./blogpost-images/jwt-blogpost-1-login.png)
 A login flow for getting a JWT
 
 **So how do we start?**
@@ -407,7 +388,7 @@ You may notice that this will result in a fairly sucky user experience. The user
 
 With JWTs, a "logout" is simply deleting the token on the client side so that it can't be used for subsequent API calls.
 
-![](https://hasura.io/blog/content/images/2019/08/Screen-Shot-2019-08-29-at-14.33.25.png)
+![](./blogpost-images/jwt-blogpost-2-check-token-flow.png)
 
 **So...is there no `/logout` API call at all?**
 
@@ -419,7 +400,7 @@ This is why keeping JWT expiry values to a small value is important. And this is
 
 In addition, you can add a deny-listing workflow to your JWTs. In this case, you can have a `/logout` API call and your auth server puts the tokens in a "invalid list". However, all the API services that consume the JWT now need to add an additional step to their JWT verification to check with the centralized "deny-list". This introduces central state again, and brings us back to what we had before using JWTs at all.
 
-![](https://hasura.io/blog/content/images/2019/08/Screen-Shot-2019-08-29-at-14.33.14.png)
+![](./blogpost-images/jwt-blogpost-3-check-token-flow-serverside.png)
 
 **Doesn’t deny-listing negate the benefit of JWT not needing any central storage?**
 
@@ -539,7 +520,7 @@ https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token
 
 Nothing much changes, except that a refresh token gets sent along with the JWT. Let's take a look a diagram of login process again, but now with `refresh_token` functionality:
 
-![Login with refresh token](https://hasura.io/blog/content/images/2019/09/Screen-Shot-2019-09-06-at-11.46.17.png)
+![Login with refresh token](./blogpost-images/jwt-blogpost-4-login-refresh-flow.png)
 
 1. The user logs in with a login API call.
 2. Server generates JWT token and `refresh_token`, and a `fingerprint`
@@ -549,7 +530,7 @@ Nothing much changes, except that a refresh token gets sent along with the JWT. 
 
 **And now, what does the silent refresh look like?**
 
-![Silent refresh workflow](https://hasura.io/blog/content/images/2019/09/Screen-Shot-2019-09-06-at-11.46.10.png)
+![Silent refresh workflow](./blogpost-images/jwt-blogpost-5-silent-refresh.png)
 Silent refresh workflow
 
 Here's what happens:
@@ -670,15 +651,15 @@ window.addEventListener("storage", (event) => {
 
 # Persisting sessions
 
-Persisting sessions is against the OWASP security guidelines for clients and token authentication.
+Persisting sessions is against the OWASP security guidelines for clients and token authentication:
 
-https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4
-
-_"... Retrieved even if the browser is restarted (Use of browser `localStorage` container)."_
+[_"... Retrieved even if the browser is restarted (Use of browser `localStorage` container)."_](https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4)
 
 There is (at the time of writing) no way deemed acceptable that allows for a persistent user session after a browser has been fully closed and re-opened, unless the browser implementation retains tab session state (`sessionStorage`).
 
-For an ongoing discussion of this topic, see https://github.com/OWASP/ASVS/issues/1141
+You may choose to store your token in `localStorage` or a Cookie instead, in order to have persistent sessions across browser restarts, but doing so is at your discretion.
+
+> Note: For an ongoing discussion of this topic, see https://github.com/OWASP/ASVS/issues/1141
 
 ---
 
@@ -704,7 +685,7 @@ This is what we want:
 2. The SSR server renders the page based on the user's identity
 3. The user gets the rendered page and then continues using the app as an SPA (single page app)
 
-# How does the SSR server know if the user is logged in?
+## How does the SSR server know if the user is logged in?
 
 The browser needs to send some information about the current user's identity to the SSR server. The only way to do this is via a cookie.
 
@@ -712,7 +693,7 @@ Since we've already implemented refresh token workflows via cookies, when we mak
 
 > **Note:** For SSR on authenticated pages, it is vital that that the domain of the auth API (and hence the domain of the `refresh_token` cookie) is the same as the domain of the SSR server. Otherwise, our cookies won't be sent to the SSR server!
 
-![](https://hasura.io/blog/content/images/2019/09/Screen-Shot-2019-09-06-at-11.43.22.png)
+![](./blogpost-images/jwt-blogpost-6-ssr1.png)
 
 This is what the SSR server does:
 
@@ -732,7 +713,7 @@ To solve this, the SSR server after rendering the page needs to send the latest 
 
 **The entire SSR flow, end to end:**
 
-![](https://hasura.io/blog/content/images/2019/09/Screen-Shot-2019-09-06-at-11.43.32.png)
+![](./blogpost-images/jwt-blogpost-7-ssr2.png)
 
 ---
 
@@ -740,7 +721,9 @@ To solve this, the SSR server after rendering the page needs to send the latest 
 
 Sample code for this blogpost with an end to end working app, with SSR capabilities is available here.
 
-The repository also contains the sample auth backend code (based on the awesome https://github.com/elitan/hasura-backend-plus).
+https://github.com/hasura/jwt-guide
+
+The repository also contains the sample auth backend code.
 
 ---
 
@@ -755,6 +738,8 @@ Make sure you're on version 1.3 or above and you're good to go.
 # References
 - JWT.io
 - OWASP notes on XSS, CSRF and similar things
+  - [OWASP JWT Cheatsheet](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
+  - [OWASP Application Security Verification Standard, v5](https://github.com/OWASP/ASVS)
 - The Parts of JWT Security Nobody Talks About | Philippe De Ryck
 Lots of other awesome stuff on the web
 
@@ -765,3 +750,25 @@ Lots of other awesome stuff on the web
 Once you've worked through all the sections above, your app should now have all the capabilities of a modern app, using a JWT and should be secure from the common major security gotchas that JWT implementations have!
 
 Let us know on [twitter](https://twitter.com/intent/tweet?text=Hey%2C%20%40VladimirNovick%20and%20%40HasuraHQ%2C%20regarding%20the%20blog%20post%20https%3A%2F%2Fbit.ly%2F2kAoaWe%2C%20) or in the comments below if you have any questions, suggestions or feedback!
+
+# Changelog
+
+- (12/28/2021) Recommendation to store token in Cookie changed to `sessionStorage`, per OWASP JWT guidelines to address `Issue: Token Storage on Client Side` [0]
+- (12/28/2021) Adopted OWASP Application Security Verification Standard  v5 [6] L1-L2 guidelines 
+  - Of note: Chapters 3 (`Session Management`) and 8 (`Data Protection`)
+- (12/28/2021) Alter section on `Persisting Sessions` to contain OWASP guidelines on this
+- (12/28/2021) Sample application repo code updated [1]
+    - Update from Next.js 9 -> 12, update `@apollo` libraries to `v3.x`
+    - Password hashing algorithm changed from `bcrypt` to native Node.js `crypto.scrypt` per OWASP guidelines [2] and to reduce number of external dependencies
+    - Authentication on frontend and backend modified to make use of a user fingerprint in addition to a token, per OWASP guidelines on preventing `Token Sidejacking` [3]
+    - Example usage of `TokenRefreshLink` [4] to manage silent refresh workflow added
+    - Server endpoints integrated through Hasura Actions [5] rather than directly invoking from client
+    - Adopt recommended use of `crypto.timingSafeEqual()` to prevent timing attacks
+
+[0]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#symptom-4
+[1]: https://github.com/hasura/jwt-guide
+[2]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/Password_Storage_Cheat_Sheet.md#scrypt
+[3]: https://github.com/OWASP/CheatSheetSeries/blob/master/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.md#token-sidejacking
+[4]: https://github.com/newsiberian/apollo-link-token-refresh
+[5]: https://hasura.io/docs/latest/graphql/core/actions/index.html
+[6]: https://owasp.org/www-project-application-security-verification-standard/
